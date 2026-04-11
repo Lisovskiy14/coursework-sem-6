@@ -72,12 +72,12 @@ public class SharedDataMonitor {
         return a;
     }
 
-    public void prepareT1Data() {
+    public void initT1Data() {
         fillVector(c, 1L);
         fillMatrix(mx, 1L);
     }
 
-    public void prepareTpData() {
+    public void initTpData() {
         fillVector(d, 1L);
         fillMatrix(mr, 1L);
         fillMatrix(mz, 1L);
