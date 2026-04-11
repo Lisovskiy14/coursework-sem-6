@@ -26,7 +26,8 @@ public class ComputeThread extends Thread {
             if (threadId == 0) {
                 monitor.initT1Data(); // Введення C, MX
                 coordinator.signalDataReady(); // Сигнал про введення даних
-            } else if (threadId == monitor.getThreadCount() - 1) {
+            }
+            if (threadId == monitor.getThreadCount() - 1) {
                 monitor.initTpData(); // Введення D, MR, MZ
                 coordinator.signalDataReady(); // Сигнал про введення даних
             }

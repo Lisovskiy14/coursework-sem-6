@@ -16,8 +16,8 @@
 public class MulticoreMathApp {
     public static void main(String[] args) {
         try {
-            int n = 1456;
-            int p = 16;
+            int n = 2400;
+            int p = 1;
 
             if (n <= 0 || p <= 0 || n % p != 0) {
                 throw new IllegalArgumentException("N та P мають бути додатними!\nN має ділитися на P без остачі!");
