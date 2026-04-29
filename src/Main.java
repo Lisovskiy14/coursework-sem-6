@@ -130,6 +130,7 @@ public class Main {
             // Отримати від потоків Тi-P дані m1(i-P), E(i-P)
             long[] allM1 = new long[P];
             long[][] allE = new long[P][N];
+            Arrays.fill(allM1, Long.MAX_VALUE);
             allM1[1] = m1i;
             allE[1] = Ei;
 
