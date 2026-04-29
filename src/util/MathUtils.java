@@ -1,4 +1,4 @@
-import java.util.Arrays;
+package util;
 
 public class MathUtils {
 
