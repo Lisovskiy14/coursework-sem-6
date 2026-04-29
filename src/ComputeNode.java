@@ -1,3 +1,5 @@
+import java.util.Arrays;
+
 public class ComputeNode extends Thread {
     private int rank;
     private int P;
@@ -36,12 +38,23 @@ public class ComputeNode extends Thread {
 
     private void runT1() {
         // Введення вектору C та матриці MX
-        double[] C = new double[N];
-        double[][] MX = new double[N][N];
+        long[] C = new long[N];
+        fillVector(C, 1L);
+        long[][] MX = new long[N][N];
+        fillMatrix(MX, 1L);
 
         // Передати потоку Т2 дані C, MX(P-1)h
+        network.send(new Message(rank, 2, C, MX));
+
         // Отримати від потоку Т2 дані MR, MZh, Dh
+        Message message = network.receive(rank);
+        long[][] MR = (long[][])  message.payload[0];
+        long[][] MZh = (long[][])  message.payload[1];
+        long[] Dh = (long[])  message.payload[2];
+
         // Обчислити Zh=C*MZh
+
+
         // Обчислити m11=min(Zh)
         // Обчислити MQh=MXh*MR
         // Обчислити E1=Dh*MQh
@@ -85,5 +98,15 @@ public class ComputeNode extends Thread {
         // Обчислити MQh=MXh*MR
         // Обчислити EP=Dh*MQh
         // Передати потоку Т2 дані m1P, EP
+    }
+
+    private void fillVector(long[] vector, long value) {
+        Arrays.fill(vector, value);
+    }
+
+    private void fillMatrix(long[][] matrix, long value) {
+        for (long[] row : matrix) {
+            Arrays.fill(row, value);
+        }
     }
 }
