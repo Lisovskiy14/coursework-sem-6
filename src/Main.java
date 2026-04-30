@@ -22,8 +22,7 @@ import java.util.Arrays;
 public class Main {
     private static final int TAG_INPUT_DATA = 100;
     private static final int TAG_RESULT = 200;
-
-    private static final int N = 2400;
+    private static final int N = 1200; // Розмірність матриць та векторів
 
     public static void main(String[] args) {
         MPI.Init(args);
@@ -33,153 +32,160 @@ public class Main {
 
         if (P < 3) {
             if (rank == 0) {
-                System.out.println("The program requires at least 3 threads.");
+                System.out.println("Помилка: Для топології 'Зірка' потрібно мінімум 3 потоки!");
             }
             MPI.Finalize();
             return;
         }
 
-        // Оголошення локальних змінних
-        long[] C;
-        long[][] MR;
-        long[][] MXh;
-        long[][] MZh;
-        long[] Dh;
+        // Локальні масиви
+        long[] C = new long[N];
+        long[] MR = new long[N * N];
+        long[] MXh = new long[H * N];
+        long[] MZh = new long[N * H];
+        long[] Dh = new long[H];
 
         long start = System.currentTimeMillis();
 
         // Введення та розсилка вхідних даних
         if (rank == 0) { // Потік Т1
             // Введення вектору C та матриці MX
-            C = fillVector(1L);
-            long[][] MX = fillMatrix(1L);
+            C = fillVector(1L, N);
+            long[] MX = fillMatrix(1L, N);
+            System.arraycopy(MX, 0, MXh, 0, H * N);
 
-            MXh = DataSplitter.getMatrixRowBlock(MX, 0, H);
-
-            // Передати потоку Т2 дані C, MX(P-1)h
-            MPI.COMM_WORLD.Send(new Object[]{C, MX}, 0, 2, MPI.OBJECT, 1, TAG_INPUT_DATA);
+            // Передати потоку Т2 дані C, MX
+            MPI.COMM_WORLD.Send(C, 0, N, MPI.LONG, 1, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Send(MX, 0, N * N, MPI.LONG, 1, TAG_INPUT_DATA);
 
             // Отримати від потоку Т2 дані MR, MZh, Dh
-            Object[] recv = new Object[3];
-            MPI.COMM_WORLD.Recv(recv, 0, recv.length, MPI.OBJECT, 1, TAG_INPUT_DATA);
-            MR = (long[][]) recv[0];
-            MZh = (long[][]) recv[1];
-            Dh = (long[]) recv[2];
+            MPI.COMM_WORLD.Recv(MR, 0, N * N, MPI.LONG, 1, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Recv(MZh, 0, N * H, MPI.LONG, 1, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Recv(Dh, 0, H, MPI.LONG, 1, TAG_INPUT_DATA);
 
-        } else if (rank == P - 1) { // Потік ТP
+        } else if (rank == P - 1) { // Потік ТР
             // Введення вектору D та матриць MR, MZ
-            MR = fillMatrix(1L);
-            long[][] MZ = fillMatrix(1L);
-            long[] D = fillVector(1L);
+            MR = fillMatrix(1L, N);
+            long[] MZ = fillMatrix(1L, N);
+            long[] D = fillVector(1L, N);
 
-            MZh = DataSplitter.getMatrixColumnBlock(MZ, P - 1, H);
+            MZh = DataSplitter.getColumnBlock(MZ, P - 1, H, N);
             Dh = DataSplitter.getVectorBlock(D, P - 1, H);
 
-            // Передати потоку Т2 дані MR, MZ(P-1)h, D(P-1)h
-            MPI.COMM_WORLD.Send(new Object[]{MR, MZ, D}, 0, 3, MPI.OBJECT, 1, TAG_INPUT_DATA);
+            // Передати потоку Т2 дані MR, MZ, D
+            MPI.COMM_WORLD.Send(MR, 0, N * N, MPI.LONG, 1, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Send(MZ, 0, N * N, MPI.LONG, 1, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Send(D, 0, N, MPI.LONG, 1, TAG_INPUT_DATA);
 
             // Отримати від потоку Т2 дані C, MXh
-            Object[] recv = new Object[2];
-            MPI.COMM_WORLD.Recv(recv, 0, recv.length, MPI.OBJECT, 1, TAG_INPUT_DATA);
-            C = (long[]) recv[0];
-            MXh = (long[][]) recv[1];
+            MPI.COMM_WORLD.Recv(C, 0, N, MPI.LONG, 1, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Recv(MXh, 0, H * N, MPI.LONG, 1, TAG_INPUT_DATA);
 
         } else if (rank == 1) { // Потік Т2
-            // Отримати від потоку Т1 дані C, MX(P-1)h
-            Object[] recv = new Object[2];
-            MPI.COMM_WORLD.Recv(recv, 0, recv.length, MPI.OBJECT, 0, TAG_INPUT_DATA);
-            C = (long[]) recv[0];
-            long[][] MX = (long[][]) recv[1];
+            // Отримати від потоку Т1 дані C, MX
+            long[] MX = new long[N * N];
+            MPI.COMM_WORLD.Recv(C, 0, N, MPI.LONG, 0, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Recv(MX, 0, N * N, MPI.LONG, 0, TAG_INPUT_DATA);
 
-            MXh = DataSplitter.getMatrixRowBlock(MX, rank, H);
-
-            // Отримати від потоку ТР дані MR, MZ(P-1)h, D(P-1)h
-            recv = new Object[3];
-            MPI.COMM_WORLD.Recv(recv, 0, recv.length, MPI.OBJECT, P - 1, TAG_INPUT_DATA);
-            MR = (long[][]) recv[0];
-            long[][] MZ = (long[][]) recv[1];
-            long[] D = (long[]) recv[2];
-
-            MZh = DataSplitter.getMatrixColumnBlock(MZ, rank, H);
-            Dh = DataSplitter.getVectorBlock(D, rank, H);
+            // Отримати від потоку ТР дані MR, MZ, D
+            long[] MZ = new long[N * N];
+            long[] D = new long[N];
+            MPI.COMM_WORLD.Recv(MR, 0, N * N, MPI.LONG, P - 1, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Recv(MZ, 0, N * N, MPI.LONG, P - 1, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Recv(D, 0, N, MPI.LONG, P - 1, TAG_INPUT_DATA);
 
             // Передати потоку T1 дані MR, MZh, Dh
-            long[][] MZh1 = DataSplitter.getMatrixColumnBlock(MZ, 0, H);
-            long[] Dh1 = DataSplitter.getVectorBlock(D, 0, H);
-            MPI.COMM_WORLD.Send(new Object[]{MR, MZh1, Dh1}, 0, 3, MPI.OBJECT, 0, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Send(MR, 0, N * N, MPI.LONG, 0, TAG_INPUT_DATA);
+            long[] MZh_0 = DataSplitter.getColumnBlock(MZ, 0, H, N);
+            MPI.COMM_WORLD.Send(MZh_0, 0, N * H, MPI.LONG, 0, TAG_INPUT_DATA);
+            long[] Dh_0 = DataSplitter.getVectorBlock(D, 0, H);
+            MPI.COMM_WORLD.Send(Dh_0, 0, H, MPI.LONG, 0, TAG_INPUT_DATA);
 
             // Передати потоку ТР дані C, MXh
-            long[][] MXhP = DataSplitter.getMatrixRowBlock(MX, P - 1, H);
-            MPI.COMM_WORLD.Send(new Object[]{C, MXhP}, 0, 2, MPI.OBJECT, P - 1, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Send(C, 0, N, MPI.LONG, P - 1, TAG_INPUT_DATA);
+            long[] MXh_P = DataSplitter.getRowBlock(MX, P - 1, H, N);
+            MPI.COMM_WORLD.Send(MXh_P, 0, H * N, MPI.LONG, P - 1, TAG_INPUT_DATA);
+
+            MXh = DataSplitter.getRowBlock(MX, 1, H, N);
+            MZh = DataSplitter.getColumnBlock(MZ, 1, H, N);
+            Dh = DataSplitter.getVectorBlock(D, 1, H);
 
             // Передати потокам Тi дані C, MR, MXh, MZh, Dh
-
             for (int i = 2; i < P - 1; i++) {
-                long[][] MXhi = DataSplitter.getMatrixRowBlock(MX, i, H);
-                long[][] MZhi = DataSplitter.getMatrixColumnBlock(MZ, i, H);
-                long[] Dhi = DataSplitter.getVectorBlock(D, i, H);
-                Object[] sendBuf = new Object[]{C, MR, MXhi, MZhi, Dhi};
-                MPI.COMM_WORLD.Send(sendBuf, 0, sendBuf.length, MPI.OBJECT, i, TAG_INPUT_DATA);
+                MPI.COMM_WORLD.Send(C, 0, N, MPI.LONG, i, TAG_INPUT_DATA);
+                MPI.COMM_WORLD.Send(MR, 0, N * N, MPI.LONG, i, TAG_INPUT_DATA);
+                long[] MXh_i = DataSplitter.getRowBlock(MX, i, H, N);
+                MPI.COMM_WORLD.Send(MXh_i, 0, H * N, MPI.LONG, i, TAG_INPUT_DATA);
+                long[] MZh_i = DataSplitter.getColumnBlock(MZ, i, H, N);
+                MPI.COMM_WORLD.Send(MZh_i, 0, N * H, MPI.LONG, i, TAG_INPUT_DATA);
+                long[] Dh_i = DataSplitter.getVectorBlock(D, i, H);
+                MPI.COMM_WORLD.Send(Dh_i, 0, H, MPI.LONG, i, TAG_INPUT_DATA);
             }
 
-        } else { // Потоки Ті
+        } else { // Потоки Тi
             // Отримати від потоку Т2 дані C, MR, MXh, MZh, Dh
-            Object[] recv = new Object[5];
-            MPI.COMM_WORLD.Recv(recv, 0, recv.length, MPI.OBJECT, 1, TAG_INPUT_DATA);
-            C = (long[]) recv[0];
-            MR = (long[][]) recv[1];
-            MXh = (long[][]) recv[2];
-            MZh = (long[][]) recv[3];
-            Dh = (long[]) recv[4];
+            MPI.COMM_WORLD.Recv(C, 0, N, MPI.LONG, 1, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Recv(MR, 0, N * N, MPI.LONG, 1, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Recv(MXh, 0, H * N, MPI.LONG, 1, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Recv(MZh, 0, N * H, MPI.LONG, 1, TAG_INPUT_DATA);
+            MPI.COMM_WORLD.Recv(Dh, 0, H, MPI.LONG, 1, TAG_INPUT_DATA);
         }
 
         // Обчислити Zh=C*MZh
-        long[] Zh = MathUtils.multiplyVectorByMatrix(C, MZh);
+        long[] Zh = MathUtils.multiplyVectorByMatrix(C, MZh, N, H);
 
         // Обчислити m1i=min(Zh)
         long m1i = MathUtils.findMin(Zh);
 
         // Обчислити MQh=MXh*MR
-        long[][] MQh = MathUtils.multiplyMatrixBlocks(MXh, MR);
+        long[] MQh = MathUtils.multiplyMatrixBlocks(MXh, MR, H, N);
 
         // Обчислити Ei=Dh*MQh
-        long[] Ei = MathUtils.multiplyVectorByMatrix(Dh, MQh);
+        long[] Ei = MathUtils.multiplyVectorByMatrix(Dh, MQh, H, N);
+
 
         // Збір результатів та редукція
         if (rank != 0 && rank != 1) { // Потоки Т3-Р
             // Передати потоку Т2 дані m1i, Ei
-            MPI.COMM_WORLD.Send(new Object[]{m1i, Ei}, 0, 2, MPI.OBJECT, 1, TAG_RESULT);
+            long[] localM1 = new long[]{m1i};
+            MPI.COMM_WORLD.Send(localM1, 0, 1, MPI.LONG, 1, TAG_RESULT);
+            MPI.COMM_WORLD.Send(Ei, 0, N, MPI.LONG, 1, TAG_RESULT);
 
         } else if (rank == 1) { // Потік Т2
             // Отримати від потоків Тi-P дані m1(i-P), E(i-P)
             long[] allM1 = new long[P];
-            long[][] allE = new long[P][N];
-            Arrays.fill(allM1, Long.MAX_VALUE);
+            long[] allE = new long[P * N];
+
             allM1[1] = m1i;
-            allE[1] = Ei;
+            System.arraycopy(Ei, 0, allE, N, N);
 
             for (int i = 2; i < P; i++) {
-                Object[] recv = new Object[2];
-                MPI.COMM_WORLD.Recv(recv, 0, recv.length, MPI.OBJECT, i, TAG_RESULT);
-                allM1[i] = (long) recv[0];
-                allE[i] = (long[]) recv[1];
+                long[] tempM1 = new long[1];
+                MPI.COMM_WORLD.Recv(tempM1, 0, 1, MPI.LONG, i, TAG_RESULT);
+                allM1[i] = tempM1[0];
+
+                long[] tempE = new long[N];
+                MPI.COMM_WORLD.Recv(tempE, 0, N, MPI.LONG, i, TAG_RESULT);
+                System.arraycopy(tempE, 0, allE, i * N, N);
             }
 
             // Передати потоку Т1 дані m1(2-P), E(2-P)
-            MPI.COMM_WORLD.Send(new Object[]{allM1, allE}, 0, 2, MPI.OBJECT, 0, TAG_RESULT);
+            MPI.COMM_WORLD.Send(allM1, 0, P, MPI.LONG, 0, TAG_RESULT);
+            MPI.COMM_WORLD.Send(allE, 0, P * N, MPI.LONG, 0, TAG_RESULT);
 
         } else { // Потік Т1
             // Отримати від потоку Т2 дані m1(2-P), E(2-P)
-            Object[] recv = new Object[2];
-            MPI.COMM_WORLD.Recv(recv, 0, recv.length, MPI.OBJECT, 1, TAG_RESULT);
-            long[] allM1 = (long[]) recv[0];
-            long[][] allE = (long[][]) recv[1];
+            long[] allM1 = new long[P];
+            long[] allE = new long[P * N];
+
+            MPI.COMM_WORLD.Recv(allM1, 0, P, MPI.LONG, 1, TAG_RESULT);
+            MPI.COMM_WORLD.Recv(allE, 0, P * N, MPI.LONG, 1, TAG_RESULT);
 
             // Обчислити m1=min(m11,m12,...,m1P)
             long m1 = MathUtils.findGlobalMin(m1i, allM1);
 
             // Обчислити E=E1+E2+...+EP
-            long[] E = MathUtils.sumVectors(Ei, allE);
+            long[] E = MathUtils.sumVectors(Ei, allE, P, N);
 
             // Обчислити m2=max(E)
             long m2 = MathUtils.findMax(E);
@@ -189,25 +195,22 @@ public class Main {
 
             long end = System.currentTimeMillis();
 
-            // Виведення a
             System.out.println("Final result a = " + a);
-            System.out.println("Time: " + (end - start) + "ms");
+            System.out.println("Time: " + (end - start) + " ms");
         }
 
         MPI.Finalize();
     }
 
-    private static long[] fillVector(long value) {
-        long[] vector = new long[N];
+    private static long[] fillVector(long value, int size) {
+        long[] vector = new long[size];
         Arrays.fill(vector, value);
         return vector;
     }
 
-    private static long[][] fillMatrix(long value) {
-        long[][] matrix = new long[N][N];
-        for (long[] row : matrix) {
-            Arrays.fill(row, value);
-        }
+    private static long[] fillMatrix(long value, int size) {
+        long[] matrix = new long[size * size];
+        Arrays.fill(matrix, value);
         return matrix;
     }
 }

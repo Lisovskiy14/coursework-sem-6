@@ -2,90 +2,67 @@ package util;
 
 public class MathUtils {
 
-    public static long[] multiplyVectorByMatrix(long[] vector, long[][] matrix) {
-        int A = vector.length;
-        int B = matrix[0].length;
+    public static long[] multiplyVectorByMatrix(long[] vector, long[] matrix, int vectorLength, int matrixColumns) {
+        long[] result = new long[matrixColumns];
 
-        long[] result = new long[B];
-
-        for (int i = 0; i < B; i++) {
-            long sum = 0;
-            for (int j = 0; j < A; j++) {
-                sum += vector[j] * matrix[j][i];
+        for (int i = 0; i < vectorLength; i++) {
+            long v = vector[i];
+            for (int j = 0; j < matrixColumns; j++) {
+                result[j] += v * matrix[i * matrixColumns + j];
             }
-            result[i] = sum;
         }
-
         return result;
     }
 
-    public static long[][] multiplyMatrixBlocks(long[][] MA, long[][] MB) {
-        int A = MA.length;
-        int B = MB.length;
+    public static long[] multiplyMatrixBlocks(long[] MAh, long[] MB, int H, int N) {
+        long[] result = new long[H * N];
 
-        long[][] result = new long[A][B];
-
-        for (int i = 0; i < A; i++) {
-            for (int k = 0; k < B; k++) {
-                long sum = 0;
-                for (int j = 0; j < B; j++) {
-                    sum += MA[i][k] * MB[k][j];
+        for (int i = 0; i < H; i++) {
+            for (int k = 0; k < N; k++) {
+                long temp = MAh[i * N + k];
+                for (int j = 0; j < N; j++) {
+                    result[i * N + j] += temp * MB[k * N + j];
                 }
-                result[i][k] = sum;
             }
         }
-
         return result;
     }
 
-    public static long[] sumVectors(long[] vector, long[][] otherVectors) {
-        int N = vector.length;
+    public static long[] sumVectors(long[] vector, long[] allVectors, int P, int N) {
         long[] result = new long[N];
-
         System.arraycopy(vector, 0, result, 0, N);
 
-        for (long[] otherVector : otherVectors) {
-            if (otherVector != null) {
-                for (int i = 0; i < N; i++) {
-                    result[i] += otherVector[i];
-                }
+        for (int p = 1; p < P; p++) { // Починаємо з 1, бо 0-й індекс порожній (це Т1)
+            for (int i = 0; i < N; i++) {
+                result[i] += allVectors[p * N + i];
             }
         }
-
         return result;
     }
 
     public static long findMin(long[] vector) {
         long min = Long.MAX_VALUE;
-
         for (long value : vector) {
-            if (value < min) {
-                min = value;
-            }
+            if (value < min) min = value;
         }
-
         return min;
     }
 
     public static long findMax(long[] vector) {
         long max = Long.MIN_VALUE;
-
         for (long value : vector) {
-            if (value > max) {
-                max = value;
-            }
+            if (value > max) max = value;
         }
-
         return max;
     }
 
-    public static long findGlobalMin(long globalMin, long[] vector) {
-        for (long value : vector) {
-            if (value < globalMin) {
-                globalMin = value;
+    public static long findGlobalMin(long localMin, long[] allMins) {
+        long globalMin = localMin;
+        for (int i = 1; i < allMins.length; i++) {
+            if (allMins[i] < globalMin) {
+                globalMin = allMins[i];
             }
         }
-
         return globalMin;
     }
 }
