@@ -45,7 +45,7 @@ public class Main {
         long[] MZh = new long[N * H];
         long[] Dh = new long[H];
 
-        long start = System.currentTimeMillis();
+        long start = System.nanoTime();
 
         // Введення та розсилка вхідних даних
         if (rank == 0) { // Потік Т1
@@ -193,10 +193,11 @@ public class Main {
             // Обчислити a=m1+m2
             long a = m1 + m2;
 
-            long end = System.currentTimeMillis();
+            long end = System.nanoTime();
+            double executionTime = (end - start) / 1_000_000.0;
 
             System.out.println("Final result a = " + a);
-            System.out.println("Time: " + (end - start) + " ms");
+            System.out.printf("Time: %.3f ms\n", executionTime);
         }
 
         MPI.Finalize();
