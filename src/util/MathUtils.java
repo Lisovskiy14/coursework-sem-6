@@ -26,12 +26,12 @@ public class MathUtils {
         long[][] result = new long[A][B];
 
         for (int i = 0; i < A; i++) {
-            for (int j = 0; j < B; j++) {
+            for (int k = 0; k < B; k++) {
                 long sum = 0;
-                for (int k = 0; k < B; k++) {
+                for (int j = 0; j < B; j++) {
                     sum += MA[i][k] * MB[k][j];
                 }
-                result[i][j] = sum;
+                result[i][k] = sum;
             }
         }
 

@@ -23,7 +23,7 @@ public class Main {
     private static final int TAG_INPUT_DATA = 100;
     private static final int TAG_RESULT = 200;
 
-    private static final int N = 1200;
+    private static final int N = 2400;
 
     public static void main(String[] args) {
         MPI.Init(args);
@@ -46,6 +46,8 @@ public class Main {
         long[][] MZh;
         long[] Dh;
 
+        long start = System.currentTimeMillis();
+
         // Введення та розсилка вхідних даних
         if (rank == 0) { // Потік Т1
             // Введення вектору C та матриці MX
@@ -61,8 +63,8 @@ public class Main {
             Object[] recv = new Object[3];
             MPI.COMM_WORLD.Recv(recv, 0, recv.length, MPI.OBJECT, 1, TAG_INPUT_DATA);
             MR = (long[][]) recv[0];
-            MZh = DataSplitter.getMatrixColumnBlock((long[][]) recv[1], 0, H);
-            Dh = DataSplitter.getVectorBlock((long[]) recv[2], 0, H);
+            MZh = (long[][]) recv[1];
+            Dh = (long[]) recv[2];
 
         } else if (rank == P - 1) { // Потік ТP
             // Введення вектору D та матриць MR, MZ
@@ -80,7 +82,7 @@ public class Main {
             Object[] recv = new Object[2];
             MPI.COMM_WORLD.Recv(recv, 0, recv.length, MPI.OBJECT, 1, TAG_INPUT_DATA);
             C = (long[]) recv[0];
-            MXh = DataSplitter.getMatrixRowBlock((long[][]) recv[1], rank, H);
+            MXh = (long[][]) recv[1];
 
         } else if (rank == 1) { // Потік Т2
             // Отримати від потоку Т1 дані C, MX(P-1)h
@@ -102,14 +104,21 @@ public class Main {
             Dh = DataSplitter.getVectorBlock(D, rank, H);
 
             // Передати потоку T1 дані MR, MZh, Dh
-            MPI.COMM_WORLD.Send(new Object[]{MR, MZ, D}, 0, 3, MPI.OBJECT, 0, TAG_INPUT_DATA);
+            long[][] MZh1 = DataSplitter.getMatrixColumnBlock(MZ, 0, H);
+            long[] Dh1 = DataSplitter.getVectorBlock(D, 0, H);
+            MPI.COMM_WORLD.Send(new Object[]{MR, MZh1, Dh1}, 0, 3, MPI.OBJECT, 0, TAG_INPUT_DATA);
 
             // Передати потоку ТР дані C, MXh
-            MPI.COMM_WORLD.Send(new Object[]{C, MX}, 0, 2, MPI.OBJECT, P - 1, TAG_INPUT_DATA);
+            long[][] MXhP = DataSplitter.getMatrixRowBlock(MX, P - 1, H);
+            MPI.COMM_WORLD.Send(new Object[]{C, MXhP}, 0, 2, MPI.OBJECT, P - 1, TAG_INPUT_DATA);
 
             // Передати потокам Тi дані C, MR, MXh, MZh, Dh
-            Object[] sendBuf = new Object[]{C, MR, MX, MZ, D};
+
             for (int i = 2; i < P - 1; i++) {
+                long[][] MXhi = DataSplitter.getMatrixRowBlock(MX, i, H);
+                long[][] MZhi = DataSplitter.getMatrixColumnBlock(MZ, i, H);
+                long[] Dhi = DataSplitter.getVectorBlock(D, i, H);
+                Object[] sendBuf = new Object[]{C, MR, MXhi, MZhi, Dhi};
                 MPI.COMM_WORLD.Send(sendBuf, 0, sendBuf.length, MPI.OBJECT, i, TAG_INPUT_DATA);
             }
 
@@ -119,9 +128,9 @@ public class Main {
             MPI.COMM_WORLD.Recv(recv, 0, recv.length, MPI.OBJECT, 1, TAG_INPUT_DATA);
             C = (long[]) recv[0];
             MR = (long[][]) recv[1];
-            MXh = DataSplitter.getMatrixRowBlock((long[][]) recv[2], rank, H);
-            MZh = DataSplitter.getMatrixColumnBlock((long[][]) recv[3], rank, H);
-            Dh = DataSplitter.getVectorBlock((long[]) recv[4], rank, H);
+            MXh = (long[][]) recv[2];
+            MZh = (long[][]) recv[3];
+            Dh = (long[]) recv[4];
         }
 
         // Обчислити Zh=C*MZh
@@ -178,8 +187,11 @@ public class Main {
             // Обчислити a=m1+m2
             long a = m1 + m2;
 
+            long end = System.currentTimeMillis();
+
             // Виведення a
             System.out.println("Final result a = " + a);
+            System.out.println("Time: " + (end - start) + "ms");
         }
 
         MPI.Finalize();
